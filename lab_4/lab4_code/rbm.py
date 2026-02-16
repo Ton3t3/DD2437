@@ -85,10 +85,30 @@ class RestrictedBoltzmannMachine():
             # you may need to use the inference functions 'get_h_given_v' and 'get_v_given_h'.
             # note that inference methods returns both probabilities and activations (samples from probablities) and you may have to decide when to use what.
 
+            # (student)
+            # We get the probabilities and activations of hidden layer
+            # given the visibile training set, and use this to get
+            # v_1 and h_1
+            h_0, _ = self.get_h_given_v(visible_trainset)
+            v_1, _ = self.get_v_given_h(h_0)
+            h_1, _ = self.get_h_given_v(v_1)
+
             # [TODO TASK 4.1] update the parameters using function 'update_params'
+            # (student)
+            self.update_params(visible_trainset,h_0,v_1,h_1)
+
+            # (student)
+            # Calculate the weight update normalized with the number of samples
+            self.weight_vh =  (1 / n_samples) * np.sum(visible_trainset.T[:,None,:] * h_0[:,None,:] - v_1.T[:,None,:] * h_1[:,None,:], axis=0)
+
+            # (student)
+            # We calculate the bias for the visible and hidden layers in similar
+            # way, but also include normalization
+            self.bias_v = (1 / n_samples) * np.sum(visible_trainset - v_1, axis=0)
+            self.bias_h = (1 / n_samples) * np.sum(h_0 - h_1, axis=0)
             
             # visualize once in a while when visible layer is input images
-            
+
             if it % self.rf["period"] == 0 and self.is_bottom:
                 
                 viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=it, grid=self.rf["grid"])
@@ -118,9 +138,13 @@ class RestrictedBoltzmannMachine():
 
         # [TODO TASK 4.1] get the gradients from the arguments (replace the 0s below) and update the weight and bias parameters
         
-        self.delta_bias_v += 0
-        self.delta_weight_vh += 0
-        self.delta_bias_h += 0
+        # (student)
+        # We impletement the update rules as seen in the slides,
+        # but note the absense of the sum and normalization as this
+        # is just a single update and not the full batch update.
+        self.delta_bias_v += v_0 - v_k
+        self.delta_weight_vh += np.dot(v_0.T, h_0) - np.dot(v_k.T, h_k)
+        self.delta_bias_h += h_0 - h_k
         
         self.bias_v += self.delta_bias_v
         self.weight_vh += self.delta_weight_vh
@@ -147,7 +171,13 @@ class RestrictedBoltzmannMachine():
 
         # [TODO TASK 4.1] compute probabilities and activations (samples from probabilities) of hidden layer (replace the zeros below) 
         
-        return np.zeros((n_samples,self.ndim_hidden)), np.zeros((n_samples,self.ndim_hidden))
+        # (student)
+        # First we calculate the probability of h given v
+        p_h_given_v = 1 / (1 + np.exp(-self.bias_h - np.dot(visible_minibatch.T, self.weight_vh)))
+        # Then we sample from the probabilities to get activations
+        h = np.random.binomial(n=1, p=p_h_given_v)
+
+        return p_h_given_v, h
 
 
     def get_v_given_h(self,hidden_minibatch):
@@ -178,16 +208,34 @@ class RestrictedBoltzmannMachine():
 
             # [TODO TASK 4.1] compute probabilities and activations (samples from probabilities) of visible layer (replace the pass below). \
             # Note that this section can also be postponed until TASK 4.2, since in this task, stand-alone RBMs do not contain labels in visible layer.
-            
-            pass
+        
+            # (student)
+            # First we compute total input for both data and label units
+            support = self.bias_v + np.dot(hidden_minibatch, self.weight_vh.T)
+            # Then we split the support into data and labels
+            support_data = support[:, :-self.n_labels]
+            support_label = support[:, -self.n_labels:]
+            # Followed by the calculation of v given h for both collections
+            p_v_given_h_data = 1 / (1 + np.exp(-support_data))
+            p_v_given_h_label = np.exp(support_label) / np.sum(np.exp(support_label), axis=1, keepdims=True)
+            # We can then use the random binomial to get the activations for data (as in get_h_given_v)
+            v_data = np.random.binomial(n=1, p=p_v_given_h_data)
+            # And use the multinomial distribution to get activations for labels
+            v_label = np.random.multinomial(n=1, pvals=p_v_given_h_label)
+            # Finally we contcatenate data and label probabilities and activations back into
+            # a normal visible layer
+            p_v_given_h = np.concatenate((p_v_given_h_data, p_v_given_h_label), axis=1)
+            v = np.concatenate((v_data, v_label), axis=1)
             
         else:
                         
             # [TODO TASK 4.1] compute probabilities and activations (samples from probabilities) of visible layer (replace the pass and zeros below)             
 
+            # (student)
+
             pass
         
-        return np.zeros((n_samples,self.ndim_visible)), np.zeros((n_samples,self.ndim_visible))
+        return p_v_given_h, v
 
 
     
