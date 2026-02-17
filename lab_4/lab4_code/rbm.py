@@ -81,7 +81,7 @@ class RestrictedBoltzmannMachine():
 
         for it in range(n_iterations):
 
-	    # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
+	        # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
             # you may need to use the inference functions 'get_h_given_v' and 'get_v_given_h'.
             # note that inference methods returns both probabilities and activations (samples from probablities) and you may have to decide when to use what.
 
@@ -101,16 +101,6 @@ class RestrictedBoltzmannMachine():
             # [TODO TASK 4.1] update the parameters using function 'update_params'
             # (student)
             self.update_params(v0, h0, v_1, h1)
-
-            # (student)
-            # Calculate the weight update normalized with the number of samples
-            #self.weight_vh =  (1 / n_samples) * (np.dot(visible_trainset.T, h0) - np.dot(v_1.T, h1))
-
-            # (student)
-            # We calculate the bias for the visible and hidden layers in similar
-            # way, but also include normalization
-            #self.bias_v = (1 / n_samples) * np.sum(visible_trainset - v_1, axis=0)
-            #self.bias_h = (1 / n_samples) * np.sum(h0 - h1, axis=0)
             
             # visualize once in a while when visible layer is input images
 
