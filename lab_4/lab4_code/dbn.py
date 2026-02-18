@@ -63,19 +63,37 @@ class DeepBeliefNet():
         
         n_samples = true_img.shape[0]
         
-        vis = true_img # visible layer gets the image data
+        #vis = true_img # visible layer gets the image data
         
-        lbl = np.ones(true_lbl.shape)/10. # start the net by telling you know nothing about labels        
+        #lbl = np.ones(true_lbl.shape)/10. # start the net by telling you know nothing about labels        
         
         # [TODO TASK 4.2] fix the image data in the visible layer and drive the network bottom to top. In the top RBM, run alternating Gibbs sampling \
         # and read out the labels (replace pass below and 'predicted_lbl' to your predicted labels).
         # NOTE : inferring entire train/test set may require too much compute memory (depends on your system). In that case, divide into mini-batches.
         
-        for _ in range(self.n_gibbs_recog):
+        for start in range(0, n_samples, self.batch_size):
 
-            pass
+            end = min(start + self.batch_size, n_samples)
+            vis = true_img[start:end] # visible layer gets the image data
+            lbl = np.ones((vis.shape[0], self.sizes["lbl"]))/10. # start the net by telling you know nothing about labels
 
-        predicted_lbl = np.zeros(true_lbl.shape)
+            # Drive network bottom to top
+            hid_activations = self.rbm_stack["vis--hid"].get_h_given_v(vis)[0]
+            pen_activations = self.rbm_stack["hid--pen"].get_h_given_v(hid_activations)[0]
+
+            # Alternating Gibbs sampling in the top RBM
+            pen_lbl_concatenated = np.concatenate([pen_activations, lbl], axis=1)
+            for _ in range(self.n_gibbs_recog):
+                # First we sample hidden layer given the visible layer
+                # then we sample the visible layer given the hidden layer
+                top_rbm_h_given_v = self.rbm_stack["pen+lbl--top"].get_h_given_v(pen_lbl_concatenated)[0]
+                top_rmb_v_given_h = self.rbm_stack["pen+lbl--top"].get_v_given_h(top_rbm_h_given_v)[0]
+
+                # Finally we clamp the pen part of the visible layerand update the label part of the visible layer
+                top_rmb_v_given_h[:, :self.sizes["pen"]] = pen_activations
+            
+            # Then we store ther predicted labels
+            predicted_lbl = top_rmb_v_given_h[:, self.sizes["pen"]:]
             
         print ("accuracy = %.2f%%"%(100.*np.mean(np.argmax(predicted_lbl,axis=1)==np.argmax(true_lbl,axis=1))))
         
@@ -101,14 +119,32 @@ class DeepBeliefNet():
 
         # [TODO TASK 4.2] fix the label in the label layer and run alternating Gibbs sampling in the top RBM. From the top RBM, drive the network \ 
         # top to the bottom visible layer (replace 'vis' from random to your generated visible layer).
-            
+
+        # First we initialize the pen layer with random values
+        pen_activations = np.random.rand(n_sample, self.sizes["pen"])
+
+        # Then we concatenate the label and pen activations
+        pen_lbl_concatenated = np.concatenate([pen_activations, lbl], axis=1)
+
+        # Then we run alternating Gibbs sampling in the top RBM
         for _ in range(self.n_gibbs_gener):
 
-            vis = np.random.rand(n_sample,self.sizes["vis"])
+            #vis = np.random.rand(n_sample,self.sizes["vis"])
+
+            # We sample the hidden and visible layers of the top RBM
+            top_rbm_h_given_v = self.rbm_stack["pen+lbl--top"].get_h_given_v(pen_lbl_concatenated)[0]
+            top_rmb_v_given_h = self.rbm_stack["pen+lbl--top"].get_v_given_h(top_rbm_h_given_v)[0]
+            # And clamp the label part of the visisble layer to the true label
+            top_rmb_v_given_h[:, self.sizes["pen"]:] = lbl
+
+            # Then we propagate from top to bottom
+            pen_activations = top_rmb_v_given_h[:, :self.sizes["pen"]]
+            hid_activations = self.rbm_stack["hid--pen"].get_v_given_h(pen_activations)[0]
+            vis_activations = self.rbm_stack["vis--hid"].get_v_given_h(hid_activations)[0]
             
-            records.append( [ ax.imshow(vis.reshape(self.image_size), cmap="bwr", vmin=0, vmax=1, animated=True, interpolation=None) ] )
+            records.append( [ ax.imshow(vis_activations.reshape(self.image_size), cmap="bwr", vmin=0, vmax=1, animated=True, interpolation=None) ] )
             
-        anim = stitch_video(fig,records).save("%s.generate%d.mp4"%(name,np.argmax(true_lbl)))            
+        anim = stitch_video(fig,records).save("%s.generate%d.gif"%(name,np.argmax(true_lbl)))            
             
         return
 
@@ -116,7 +152,7 @@ class DeepBeliefNet():
 
         """
         Greedy layer-wise training by stacking RBMs. This method first tries to load previous saved parameters of the entire RBM stack. 
-        If not found, learns layer-by-layer (which needs to be completed) .
+        If not found, learns layer-by-layer (which needs to be completed).
         Notice that once you stack more layers on top of a RBM, the weights are permanently untwined.
 
         Args:
@@ -143,20 +179,26 @@ class DeepBeliefNet():
             """ 
             CD-1 training for vis--hid 
             """            
+            self.rbm_stack["vis--hid"].cd1(vis_trainset, n_iterations=1000)
             self.savetofile_rbm(loc="trained_rbm",name="vis--hid")
+            vis_hid_activations = self.rbm_stack["vis--hid"].get_h_given_v(vis_trainset)
 
             print ("training hid--pen")
             """ 
             CD-1 training for hid--pen 
             """            
-            self.rbm_stack["vis--hid"].untwine_weights()            
-            self.savetofile_rbm(loc="trained_rbm",name="hid--pen")            
+            self.rbm_stack["vis--hid"].untwine_weights()   
+            self.rbm_stack["hid--pen"].cd1(vis_hid_activations, n_iterations=1000)
+            self.savetofile_rbm(loc="trained_rbm",name="hid--pen")   
+            pen_activations = self.rbm_stack["hid--pen"].get_h_given_v(vis_hid_activations)         
 
             print ("training pen+lbl--top")
             """ 
             CD-1 training for pen+lbl--top 
             """
             self.rbm_stack["hid--pen"].untwine_weights()
+            pen_lbl_concatenated = np.concatenate([pen_activations, lbl_trainset], axis=1)
+            self.rbm_stack["pen+lbl--top"].cd1(pen_lbl_concatenated, n_iterations=1000)
             self.savetofile_rbm(loc="trained_rbm",name="pen+lbl--top")            
 
         return    
