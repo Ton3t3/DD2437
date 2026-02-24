@@ -1,3 +1,4 @@
+from numpy import ceil
 from util import *
 
 class RestrictedBoltzmannMachine():
@@ -79,7 +80,24 @@ class RestrictedBoltzmannMachine():
         
         n_samples = visible_trainset.shape[0]
 
+
+
+        batches_number = int(n_samples / self.batch_size)
+        n_iterations = n_iterations * batches_number
+
+        print(f"n_iterations={n_iterations} with batch_size={self.batch_size} and n_samples={n_samples}")
+
+        w_change = []
+        bv_change = []
+        bh_change = []
+        loss_history = []
+        
         for it in range(n_iterations):
+            start_index = (it * self.batch_size) % n_samples
+            end_index = start_index + self.batch_size
+            v_0 = visible_trainset[start_index:end_index, :]
+
+        #for it in range(n_iterations):
 
 	        # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
             # you may need to use the inference functions 'get_h_given_v' and 'get_v_given_h'.
@@ -89,30 +107,42 @@ class RestrictedBoltzmannMachine():
             # self.weight_vh has shape: (784, 200)
 
             # (student)
+            #for batch in range(batches_number):
             # We get the probabilities and activations of hidden layer
             # given the visibile training set, and use this to get
             # v_1 and h_1
-            idx = np.random.randint(0, n_samples, self.batch_size)
-            v_0 = visible_trainset[idx]
+
+            #start_index = batch * self.batch_size
+            #end_index = min((batch + 1) * self.batch_size, n_samples)
+            #v_0 = visible_trainset[start_index:end_index, :]
+
             p_h0, h0 = self.get_h_given_v(v_0)
             p_v1, v_1 = self.get_v_given_h(h0)
             p_h1, h1 = self.get_h_given_v(v_1)
 
             # [TODO TASK 4.1] update the parameters using function 'update_params'
             # (student)
-            self.update_params(v_0, h0, v_1, h1)
+            changes = self.update_params(v_0, h0, v_1, h1)
+            # Only store history if batch is last in the epoch
+            w_change.append(changes["w_change"])
+            bv_change.append(changes["bv_change"]) 
+            bh_change.append(changes["bh_change"])
+            loss_history.append(np.linalg.norm(v_0 - v_1))
             
             # visualize once in a while when visible layer is input images
 
-            if it % self.rf["period"] == 0 and self.is_bottom:
-                
-                viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=it, grid=self.rf["grid"])
+            #if it % self.rf["period"] == 0 and self.is_bottom:
+            if it % batches_number == 0 and self.is_bottom:
+                epoch = it // batches_number
+                viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=epoch, grid=self.rf["grid"])
 
             # print progress
             
-            if it % self.print_period == 0 :
-
-                print ("iteration=%7d recon_loss=%4.4f"%(it, np.linalg.norm(v_0 - v_1)))
+            #if it % self.print_period == 0 :
+            if it % batches_number == 0 :
+                epoch = it // batches_number
+                print ("iteration=%7d recon_loss=%4.4f"%(epoch, loss_history[-1]))
+                print(f"w_change={w_change[-1]:.6f} bv_change={bv_change[-1]:.6f} bh_change={bh_change[-1]:.6f}")
         
         return
     
@@ -137,6 +167,10 @@ class RestrictedBoltzmannMachine():
         # Store the old weights and biases in order to compare change
         # with the goal of later displaying this data in order to track
         # the learning process
+        if not hasattr(self, "old_weight_vh"):
+            self.old_weight_vh = np.copy(self.weight_vh)
+            self.old_bias_v = np.copy(self.bias_v)
+            self.old_bias_h = np.copy(self.bias_h)
 
         # We impletement the update rules as seen in the slides,
         # but note the absense of the sum and normalization as this
@@ -148,8 +182,21 @@ class RestrictedBoltzmannMachine():
         self.bias_v += self.delta_bias_v
         self.weight_vh += self.delta_weight_vh
         self.bias_h += self.delta_bias_h
+
+        # Finally we calculate parameter changes for tracking purposes
+        w_change = np.linalg.norm(self.old_weight_vh - self.weight_vh)
+        bv_change = np.linalg.norm(self.old_bias_v - self.bias_v)
+        bh_change = np.linalg.norm(self.old_bias_h - self.bias_h)
+        # And update the old weights and biases for the next iteration
+        self.old_weight_vh = np.copy(self.weight_vh)
+        self.old_bias_v = np.copy(self.bias_v)
+        self.old_bias_h = np.copy(self.bias_h)
         
-        return
+        return {
+            "w_change": w_change,
+            "bv_change": bv_change,
+            "bh_change": bh_change
+        }
 
     def get_h_given_v(self,visible_minibatch):
         
