@@ -316,7 +316,13 @@ class RestrictedBoltzmannMachine():
 
         # [TODO TASK 4.2] perform same computation as the function 'get_h_given_v' but with directed connections (replace the zeros below) 
         
-        return np.zeros((n_samples,self.ndim_hidden)), np.zeros((n_samples,self.ndim_hidden))
+        # (student)
+        # First we calculate the probability of h given v
+        p_h_given_v_direct = sigmoid(self.bias_h + np.dot(visible_minibatch, self.weight_v_to_h))
+        # Then we sample from the probabilities to get activations
+        h_direct = np.random.binomial(n=1, p=p_h_given_v_direct)
+
+        return p_h_given_v_direct, h_direct
 
 
     def get_v_given_h_dir(self,hidden_minibatch):
@@ -350,15 +356,19 @@ class RestrictedBoltzmannMachine():
             # this case should never be executed : when the RBM is a part of a DBN and is at the top, it will have not have directed connections.
             # Appropriate code here is to raise an error (replace pass below)
             
-            pass
+            raise NotImplementedError("This function should not be executed for the top RBM in a DBN, as it does not have directed connections.")
+            
             
         else:
                         
             # [TODO TASK 4.2] performs same computaton as the function 'get_v_given_h' but with directed connections (replace the pass and zeros below)             
-
-            pass
-            
-        return np.zeros((n_samples,self.ndim_visible)), np.zeros((n_samples,self.ndim_visible))        
+            # (student)
+            # First we calculate the probability of v given h
+            p_v_given_h_direct = sigmoid(self.bias_v + np.dot(hidden_minibatch, self.weight_h_to_v.T))
+            # Then we sample from the probabilities to get activations (similar to get_h_given_v)
+            v_direct = np.random.binomial(n=1, p=p_v_given_h_direct)
+        
+        return p_v_given_h_direct, v_direct    
         
     def update_generate_params(self,inps,trgs,preds):
         
