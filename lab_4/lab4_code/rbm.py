@@ -93,14 +93,14 @@ class RestrictedBoltzmannMachine():
             # given the visibile training set, and use this to get
             # v_1 and h_1
             idx = np.random.randint(0, n_samples, self.batch_size)
-            v0 = visible_trainset[idx]
-            p_h0, h0 = self.get_h_given_v(v0)
+            v_0 = visible_trainset[idx]
+            p_h0, h0 = self.get_h_given_v(v_0)
             p_v1, v_1 = self.get_v_given_h(h0)
             p_h1, h1 = self.get_h_given_v(v_1)
 
             # [TODO TASK 4.1] update the parameters using function 'update_params'
             # (student)
-            self.update_params(v0, h0, v_1, h1)
+            self.update_params(v_0, h0, v_1, h1)
             
             # visualize once in a while when visible layer is input images
 
@@ -112,7 +112,7 @@ class RestrictedBoltzmannMachine():
             
             if it % self.print_period == 0 :
 
-                print ("iteration=%7d recon_loss=%4.4f"%(it, np.linalg.norm(visible_trainset - visible_trainset)))
+                print ("iteration=%7d recon_loss=%4.4f"%(it, np.linalg.norm(v_0 - v_1)))
         
         return
     
@@ -132,8 +132,12 @@ class RestrictedBoltzmannMachine():
         """
 
         # [TODO TASK 4.1] get the gradients from the arguments (replace the 0s below) and update the weight and bias parameters
-        
+
         # (student)
+        # Store the old weights and biases in order to compare change
+        # with the goal of later displaying this data in order to track
+        # the learning process
+
         # We impletement the update rules as seen in the slides,
         # but note the absense of the sum and normalization as this
         # is just a single update and not the full batch update.
