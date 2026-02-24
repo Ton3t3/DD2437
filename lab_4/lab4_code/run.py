@@ -17,18 +17,9 @@ if __name__ == "__main__":
                                      image_size=image_size,
                                      is_top=False,
                                      n_labels=10,
-                                     batch_size=10
+                                     batch_size=20
     )
-
-    # As we're asked to do 10-20 epochs, we must calculate the amount
-    # of interations based on this, combined with batch size and
-    # the amount of training samples
-    n_epochs = 10
-    n_samples = train_imgs.shape[0]
-    iterations_per_epoch = n_samples // rbm.batch_size
-    n_iterations = n_epochs * iterations_per_epoch
-    
-    rbm.cd1(visible_trainset=train_imgs, n_iterations=n_iterations) # Changed n_iterations from 10000
+    rbm.cd1(visible_trainset=train_imgs, n_iterations=15)
     
     pass
 
