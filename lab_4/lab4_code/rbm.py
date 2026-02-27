@@ -1,3 +1,4 @@
+from numpy import ceil
 from util import *
 
 class RestrictedBoltzmannMachine():
@@ -79,45 +80,69 @@ class RestrictedBoltzmannMachine():
         
         n_samples = visible_trainset.shape[0]
 
-        for it in range(n_iterations):
 
-	    # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
+
+        batches_number = int(n_samples / self.batch_size)
+        n_iterations = n_iterations * batches_number
+
+        print(f"n_iterations={n_iterations} with batch_size={self.batch_size} and n_samples={n_samples}")
+
+        w_change = []
+        bv_change = []
+        bh_change = []
+        loss_history = []
+        
+        for it in range(n_iterations):
+            start_index = (it * self.batch_size) % n_samples
+            end_index = start_index + self.batch_size
+            v_0 = visible_trainset[start_index:end_index, :]
+
+        #for it in range(n_iterations):
+
+	        # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
             # you may need to use the inference functions 'get_h_given_v' and 'get_v_given_h'.
             # note that inference methods returns both probabilities and activations (samples from probablities) and you may have to decide when to use what.
 
+            # visible_trainset has shape: (60000, 784)
+            # self.weight_vh has shape: (784, 200)
+
             # (student)
+            #for batch in range(batches_number):
             # We get the probabilities and activations of hidden layer
             # given the visibile training set, and use this to get
             # v_1 and h_1
-            h_0, _ = self.get_h_given_v(visible_trainset)
-            v_1, _ = self.get_v_given_h(h_0)
-            h_1, _ = self.get_h_given_v(v_1)
+
+            #start_index = batch * self.batch_size
+            #end_index = min((batch + 1) * self.batch_size, n_samples)
+            #v_0 = visible_trainset[start_index:end_index, :]
+
+            p_h0, h0 = self.get_h_given_v(v_0)
+            p_v1, v_1 = self.get_v_given_h(h0)
+            p_h1, h1 = self.get_h_given_v(v_1)
 
             # [TODO TASK 4.1] update the parameters using function 'update_params'
             # (student)
-            self.update_params(visible_trainset,h_0,v_1,h_1)
-
-            # (student)
-            # Calculate the weight update normalized with the number of samples
-            self.weight_vh =  (1 / n_samples) * np.sum(visible_trainset.T[:,None,:] * h_0[:,None,:] - v_1.T[:,None,:] * h_1[:,None,:], axis=0)
-
-            # (student)
-            # We calculate the bias for the visible and hidden layers in similar
-            # way, but also include normalization
-            self.bias_v = (1 / n_samples) * np.sum(visible_trainset - v_1, axis=0)
-            self.bias_h = (1 / n_samples) * np.sum(h_0 - h_1, axis=0)
+            changes = self.update_params(v_0, h0, v_1, h1)
+            # Only store history if batch is last in the epoch
+            w_change.append(changes["w_change"])
+            bv_change.append(changes["bv_change"]) 
+            bh_change.append(changes["bh_change"])
+            loss_history.append(np.linalg.norm(v_0 - v_1))
             
             # visualize once in a while when visible layer is input images
 
-            if it % self.rf["period"] == 0 and self.is_bottom:
-                
-                viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=it, grid=self.rf["grid"])
+            #if it % self.rf["period"] == 0 and self.is_bottom:
+            if it % batches_number == 0 and self.is_bottom:
+                epoch = it // batches_number
+                viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=epoch, grid=self.rf["grid"])
 
             # print progress
             
-            if it % self.print_period == 0 :
-
-                print ("iteration=%7d recon_loss=%4.4f"%(it, np.linalg.norm(visible_trainset - visible_trainset)))
+            #if it % self.print_period == 0 :
+            if it % batches_number == 0 :
+                epoch = it // batches_number
+                print ("iteration=%7d recon_loss=%4.4f"%(epoch, loss_history[-1]))
+                print(f"w_change={w_change[-1]:.6f} bv_change={bv_change[-1]:.6f} bh_change={bh_change[-1]:.6f}")
         
         return
     
@@ -137,20 +162,41 @@ class RestrictedBoltzmannMachine():
         """
 
         # [TODO TASK 4.1] get the gradients from the arguments (replace the 0s below) and update the weight and bias parameters
-        
+
         # (student)
+        # Store the old weights and biases in order to compare change
+        # with the goal of later displaying this data in order to track
+        # the learning process
+        if not hasattr(self, "old_weight_vh"):
+            self.old_weight_vh = np.copy(self.weight_vh)
+            self.old_bias_v = np.copy(self.bias_v)
+            self.old_bias_h = np.copy(self.bias_h)
+
         # We impletement the update rules as seen in the slides,
         # but note the absense of the sum and normalization as this
         # is just a single update and not the full batch update.
-        self.delta_bias_v += v_0 - v_k
-        self.delta_weight_vh += np.dot(v_0.T, h_0) - np.dot(v_k.T, h_k)
-        self.delta_bias_h += h_0 - h_k
+        self.delta_bias_v = np.mean(v_0 - v_k, axis=0) * self.learning_rate + self.momentum * self.delta_bias_v
+        self.delta_weight_vh = ((v_0.T @ h_0) - (v_k.T @ h_k)) / self.batch_size * self.learning_rate + self.momentum * self.delta_weight_vh
+        self.delta_bias_h = np.mean(h_0 - h_k, axis=0) * self.learning_rate + self.momentum * self.delta_bias_h
         
         self.bias_v += self.delta_bias_v
         self.weight_vh += self.delta_weight_vh
         self.bias_h += self.delta_bias_h
+
+        # Finally we calculate parameter changes for tracking purposes
+        w_change = np.linalg.norm(self.old_weight_vh - self.weight_vh)
+        bv_change = np.linalg.norm(self.old_bias_v - self.bias_v)
+        bh_change = np.linalg.norm(self.old_bias_h - self.bias_h)
+        # And update the old weights and biases for the next iteration
+        self.old_weight_vh = np.copy(self.weight_vh)
+        self.old_bias_v = np.copy(self.bias_v)
+        self.old_bias_h = np.copy(self.bias_h)
         
-        return
+        return {
+            "w_change": w_change,
+            "bv_change": bv_change,
+            "bh_change": bh_change
+        }
 
     def get_h_given_v(self,visible_minibatch):
         
@@ -173,7 +219,7 @@ class RestrictedBoltzmannMachine():
         
         # (student)
         # First we calculate the probability of h given v
-        p_h_given_v = 1 / (1 + np.exp(-self.bias_h - np.dot(visible_minibatch.T, self.weight_vh)))
+        p_h_given_v = sigmoid(self.bias_h + np.dot(visible_minibatch, self.weight_vh))
         # Then we sample from the probabilities to get activations
         h = np.random.binomial(n=1, p=p_h_given_v)
 
@@ -216,7 +262,7 @@ class RestrictedBoltzmannMachine():
             support_data = support[:, :-self.n_labels]
             support_label = support[:, -self.n_labels:]
             # Followed by the calculation of v given h for both collections
-            p_v_given_h_data = 1 / (1 + np.exp(-support_data))
+            p_v_given_h_data = sigmoid(support_data)
             p_v_given_h_label = np.exp(support_label) / np.sum(np.exp(support_label), axis=1, keepdims=True)
             # We can then use the random binomial to get the activations for data (as in get_h_given_v)
             v_data = np.random.binomial(n=1, p=p_v_given_h_data)
@@ -232,8 +278,10 @@ class RestrictedBoltzmannMachine():
             # [TODO TASK 4.1] compute probabilities and activations (samples from probabilities) of visible layer (replace the pass and zeros below)             
 
             # (student)
-
-            pass
+            # First we calculate the probability of v given h
+            p_v_given_h = sigmoid(self.bias_v + np.dot(hidden_minibatch, self.weight_vh.T))
+            # Then we sample from the probabilities to get activations (similar to get_h_given_v)
+            v = np.random.binomial(n=1, p=p_v_given_h)
         
         return p_v_given_h, v
 
@@ -268,7 +316,13 @@ class RestrictedBoltzmannMachine():
 
         # [TODO TASK 4.2] perform same computation as the function 'get_h_given_v' but with directed connections (replace the zeros below) 
         
-        return np.zeros((n_samples,self.ndim_hidden)), np.zeros((n_samples,self.ndim_hidden))
+        # (student)
+        # First we calculate the probability of h given v
+        p_h_given_v_direct = sigmoid(self.bias_h + np.dot(visible_minibatch, self.weight_v_to_h))
+        # Then we sample from the probabilities to get activations
+        h_direct = np.random.binomial(n=1, p=p_h_given_v_direct)
+
+        return p_h_given_v_direct, h_direct
 
 
     def get_v_given_h_dir(self,hidden_minibatch):
@@ -302,15 +356,19 @@ class RestrictedBoltzmannMachine():
             # this case should never be executed : when the RBM is a part of a DBN and is at the top, it will have not have directed connections.
             # Appropriate code here is to raise an error (replace pass below)
             
-            pass
+            raise NotImplementedError("This function should not be executed for the top RBM in a DBN, as it does not have directed connections.")
+            
             
         else:
                         
             # [TODO TASK 4.2] performs same computaton as the function 'get_v_given_h' but with directed connections (replace the pass and zeros below)             
-
-            pass
-            
-        return np.zeros((n_samples,self.ndim_visible)), np.zeros((n_samples,self.ndim_visible))        
+            # (student)
+            # First we calculate the probability of v given h
+            p_v_given_h_direct = sigmoid(self.bias_v + np.dot(hidden_minibatch, self.weight_h_to_v.T))
+            # Then we sample from the probabilities to get activations (similar to get_h_given_v)
+            v_direct = np.random.binomial(n=1, p=p_v_given_h_direct)
+        
+        return p_v_given_h_direct, v_direct    
         
     def update_generate_params(self,inps,trgs,preds):
         
