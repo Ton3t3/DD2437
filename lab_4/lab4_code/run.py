@@ -11,7 +11,18 @@ if __name__ == "__main__":
     
     print ("\nStarting a Restricted Boltzmann Machine..")
 
-    rbm = RestrictedBoltzmannMachine(ndim_visible=image_size[0]*image_size[1],
+    # rbm = RestrictedBoltzmannMachine(ndim_visible=image_size[0]*image_size[1],
+    #                                  ndim_hidden=500,
+    #                                  is_bottom=True,
+    #                                  image_size=image_size,
+    #                                  is_top=False,
+    #                                  n_labels=10,
+    #                                  batch_size=20
+    # )
+    # rbm.cd1(visible_trainset=train_imgs, n_iterations=15)#15
+
+    #FOR DEEP NETWORK, INCLUDE MORE LAYERS
+    rbm1 = RestrictedBoltzmannMachine(ndim_visible=784,
                                      ndim_hidden=500,
                                      is_bottom=True,
                                      image_size=image_size,
@@ -19,9 +30,23 @@ if __name__ == "__main__":
                                      n_labels=10,
                                      batch_size=20
     )
-    rbm.cd1(visible_trainset=train_imgs, n_iterations=15)
-    
-    pass
+    rbm1.cd1(visible_trainset=train_imgs, n_iterations=10)#15
+
+    p_h1, h1 = rbm1.get_h_given_v(train_imgs)
+
+
+
+    rbm2 = RestrictedBoltzmannMachine(ndim_visible=500,
+                                     ndim_hidden=500,
+                                     is_bottom=False,
+                                     image_size=image_size,
+                                     is_top=False,
+                                     n_labels=10,
+                                     batch_size=20
+    )
+    rbm2.cd1(visible_trainset=p_h1, n_iterations=10)#15
+
+    # pass
 
     ''' deep- belief net '''
 
@@ -34,8 +59,8 @@ if __name__ == "__main__":
     )
     
     ''' greedy layer-wise training '''
-
-    dbn.train_greedylayerwise(vis_trainset=train_imgs, lbl_trainset=train_lbls, n_iterations=10000)
+    print("\nGreedy layer-wise training..")
+    dbn.train_greedylayerwise(vis_trainset=train_imgs, lbl_trainset=train_lbls, n_iterations=100)#1000
 
     dbn.recognize(train_imgs, train_lbls)
     

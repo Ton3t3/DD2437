@@ -268,6 +268,10 @@ class RestrictedBoltzmannMachine():
             v_data = np.random.binomial(n=1, p=p_v_given_h_data)
             # And use the multinomial distribution to get activations for labels
             v_label = np.random.multinomial(n=1, pvals=p_v_given_h_label)
+            # v_label = np.array([
+            #     np.random.multinomial(1, pvals)
+            #     for pvals in p_v_given_h_label
+            # ])
             # Finally we contcatenate data and label probabilities and activations back into
             # a normal visible layer
             p_v_given_h = np.concatenate((p_v_given_h_data, p_v_given_h_label), axis=1)
@@ -292,10 +296,13 @@ class RestrictedBoltzmannMachine():
     
 
     def untwine_weights(self):
-        
+        print(f"UNTWINING WEIGHTS: self.weights_vh: {self.weight_vh.shape}")
         self.weight_v_to_h = np.copy( self.weight_vh )
+        print(f"UNTWINING WEIGHTS: self.weights_v_to_h: {self.weight_v_to_h.shape}")
         self.weight_h_to_v = np.copy( np.transpose(self.weight_vh) )
+        print(f"UNTWINING WEIGHTS: self.weights_h_to_v: {self.weight_h_to_v.shape}")
         self.weight_vh = None
+        print("Weights untwined. weight_vh set to None.")
 
     def get_h_given_v_dir(self,visible_minibatch):
 
