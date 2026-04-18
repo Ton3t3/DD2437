@@ -66,85 +66,137 @@ class RestrictedBoltzmannMachine():
         
         return
 
-        
-    def cd1(self,visible_trainset, n_iterations=10000):
-        
+    def cd1(self,visible_trainset, n_iterations=30000):
         """Contrastive Divergence with k=1 full alternating Gibbs sampling
 
         Args:
           visible_trainset: training data for this rbm, shape is (size of training set, size of visible layer)
           n_iterations: number of iterations of learning (each iteration learns a mini-batch)
         """
-
         print ("learning CD1")
-        
+        print("Visible trainset shape: ", visible_trainset.shape)
+
         n_samples = visible_trainset.shape[0]
 
-
-
-        batches_number = int(n_samples / self.batch_size)
-        n_iterations = n_iterations * batches_number
-
-        print(f"n_iterations={n_iterations} with batch_size={self.batch_size} and n_samples={n_samples}")
-
-        w_change = []
-        bv_change = []
-        bh_change = []
-        loss_history = []
-        
+        #We want to use minibatches of size around 20, each epoch is a full swipe through the training set divided in minibatches
+        #We want 10/20 epochs, so if each iteration is a minibatch and we have 60000 data points, 60000/20 = 3000, so 10000 iter is about 3.3 epochs.
+        recon_losses = []
         for it in range(n_iterations):
-            start_index = (it * self.batch_size) % n_samples
-            end_index = start_index + self.batch_size
-            v_0 = visible_trainset[start_index:end_index, :]
-
-        #for it in range(n_iterations):
-
-	        # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
+            minibatch_index = np.random.choice(n_samples, self.batch_size, replace = False)
+            visible_mini = visible_trainset[minibatch_index]
+            #print(visible_mini.shape)
+	    
+        # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
             # you may need to use the inference functions 'get_h_given_v' and 'get_v_given_h'.
             # note that inference methods returns both probabilities and activations (samples from probablities) and you may have to decide when to use what.
 
-            # visible_trainset has shape: (60000, 784)
-            # self.weight_vh has shape: (784, 200)
+            v_0 = visible_mini
 
-            # (student)
-            #for batch in range(batches_number):
-            # We get the probabilities and activations of hidden layer
-            # given the visibile training set, and use this to get
-            # v_1 and h_1
+            _, h_0 = self.get_h_given_v(v_0)
+            v_1, _ = self.get_v_given_h(h_0)
 
-            #start_index = batch * self.batch_size
-            #end_index = min((batch + 1) * self.batch_size, n_samples)
-            #v_0 = visible_trainset[start_index:end_index, :]
-
-            p_h0, h0 = self.get_h_given_v(v_0)
-            p_v1, v_1 = self.get_v_given_h(h0)
-            p_h1, h1 = self.get_h_given_v(v_1)
+            h_1, _ = self.get_h_given_v(v_1)
 
             # [TODO TASK 4.1] update the parameters using function 'update_params'
-            # (student)
-            changes = self.update_params(v_0, h0, v_1, h1)
-            # Only store history if batch is last in the epoch
-            w_change.append(changes["w_change"])
-            bv_change.append(changes["bv_change"]) 
-            bh_change.append(changes["bh_change"])
-            loss_history.append(np.linalg.norm(v_0 - v_1))
-            
-            # visualize once in a while when visible layer is input images
 
-            #if it % self.rf["period"] == 0 and self.is_bottom:
-            if it % batches_number == 0 and self.is_bottom:
-                epoch = it // batches_number
-                viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=epoch, grid=self.rf["grid"])
+            recon_loss = np.mean((v_0 - v_1)**2)
+            recon_losses.append(recon_loss)
+            
+            self.update_params(v_0, h_0, v_1, h_1)
+
+
+            # visualize once in a while when visible layer is input images
+            
+            # if it % self.rf["period"] == 0 and self.is_bottom:
+                # viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=it, grid=self.rf["grid"])
 
             # print progress
             
-            #if it % self.print_period == 0 :
-            if it % batches_number == 0 :
-                epoch = it // batches_number
-                print ("iteration=%7d recon_loss=%4.4f"%(epoch, loss_history[-1]))
-                print(f"w_change={w_change[-1]:.6f} bv_change={bv_change[-1]:.6f} bh_change={bh_change[-1]:.6f}")
+            if it % self.print_period == 0 :
+                print("iteration=%7d recon_loss=%4.4f" % (it, recon_loss))
         
-        return
+        self.recon_losses = np.array(recon_losses)
+        return self.recon_losses
+
+    """Previous code"""    
+    # def cd1(self,visible_trainset, n_iterations=10000):
+        
+    #     """Contrastive Divergence with k=1 full alternating Gibbs sampling
+
+    #     Args:
+    #       visible_trainset: training data for this rbm, shape is (size of training set, size of visible layer)
+    #       n_iterations: number of iterations of learning (each iteration learns a mini-batch)
+    #     """
+
+    #     print ("learning CD1")
+        
+    #     n_samples = visible_trainset.shape[0]
+
+
+
+    #     batches_number = int(n_samples / self.batch_size)
+    #     n_iterations = n_iterations * batches_number
+
+    #     print(f"n_iterations={n_iterations} with batch_size={self.batch_size} and n_samples={n_samples}")
+
+    #     w_change = []
+    #     bv_change = []
+    #     bh_change = []
+    #     loss_history = []
+        
+    #     for it in range(n_iterations):
+    #         start_index = (it * self.batch_size) % n_samples
+    #         end_index = start_index + self.batch_size
+    #         v_0 = visible_trainset[start_index:end_index, :]
+
+    #     #for it in range(n_iterations):
+
+	#         # [TODO TASK 4.1] run k=1 alternating Gibbs sampling : v_0 -> h_0 ->  v_1 -> h_1.
+    #         # you may need to use the inference functions 'get_h_given_v' and 'get_v_given_h'.
+    #         # note that inference methods returns both probabilities and activations (samples from probablities) and you may have to decide when to use what.
+
+    #         # visible_trainset has shape: (60000, 784)
+    #         # self.weight_vh has shape: (784, 200)
+
+    #         # (student)
+    #         #for batch in range(batches_number):
+    #         # We get the probabilities and activations of hidden layer
+    #         # given the visibile training set, and use this to get
+    #         # v_1 and h_1
+
+    #         #start_index = batch * self.batch_size
+    #         #end_index = min((batch + 1) * self.batch_size, n_samples)
+    #         #v_0 = visible_trainset[start_index:end_index, :]
+
+    #         p_h0, h0 = self.get_h_given_v(v_0)
+    #         p_v1, v_1 = self.get_v_given_h(h0)
+    #         p_h1, h1 = self.get_h_given_v(v_1)
+
+    #         # [TODO TASK 4.1] update the parameters using function 'update_params'
+    #         # (student)
+    #         changes = self.update_params(v_0, h0, v_1, h1)
+    #         # Only store history if batch is last in the epoch
+    #         w_change.append(changes["w_change"])
+    #         bv_change.append(changes["bv_change"]) 
+    #         bh_change.append(changes["bh_change"])
+    #         loss_history.append(np.linalg.norm(v_0 - v_1))
+            
+    #         # visualize once in a while when visible layer is input images
+
+    #         #if it % self.rf["period"] == 0 and self.is_bottom:
+    #         if it % batches_number == 0 and self.is_bottom:
+    #             epoch = it // batches_number
+    #             viz_rf(weights=self.weight_vh[:,self.rf["ids"]].reshape((self.image_size[0],self.image_size[1],-1)), it=epoch, grid=self.rf["grid"])
+
+    #         # print progress
+            
+    #         #if it % self.print_period == 0 :
+    #         if it % batches_number == 0 :
+    #             epoch = it // batches_number
+    #             print ("iteration=%7d recon_loss=%4.4f"%(epoch, loss_history[-1]))
+    #             print(f"w_change={w_change[-1]:.6f} bv_change={bv_change[-1]:.6f} bh_change={bh_change[-1]:.6f}")
+        
+    #     return
     
 
     def update_params(self,v_0,h_0,v_k,h_k):
@@ -255,28 +307,41 @@ class RestrictedBoltzmannMachine():
             # [TODO TASK 4.1] compute probabilities and activations (samples from probabilities) of visible layer (replace the pass below). \
             # Note that this section can also be postponed until TASK 4.2, since in this task, stand-alone RBMs do not contain labels in visible layer.
         
-            # (student)
-            # First we compute total input for both data and label units
-            support = self.bias_v + np.dot(hidden_minibatch, self.weight_vh.T)
-            # Then we split the support into data and labels
-            support_data = support[:, :-self.n_labels]
-            support_label = support[:, -self.n_labels:]
-            # Followed by the calculation of v given h for both collections
-            p_v_given_h_data = sigmoid(support_data)
-            p_v_given_h_label = np.exp(support_label) / np.sum(np.exp(support_label), axis=1, keepdims=True)
-            # We can then use the random binomial to get the activations for data (as in get_h_given_v)
-            v_data = np.random.binomial(n=1, p=p_v_given_h_data)
-            # And use the multinomial distribution to get activations for labels
-            v_label = np.random.multinomial(n=1, pvals=p_v_given_h_label)
-            # v_label = np.array([
-            #     np.random.multinomial(1, pvals)
-            #     for pvals in p_v_given_h_label
-            # ])
-            # Finally we contcatenate data and label probabilities and activations back into
-            # a normal visible layer
-            p_v_given_h = np.concatenate((p_v_given_h_data, p_v_given_h_label), axis=1)
-            v = np.concatenate((v_data, v_label), axis=1)
+            # # (student)
+            # # First we compute total input for both data and label units
+            # support = self.bias_v + np.dot(hidden_minibatch, self.weight_vh.T)
+            # # Then we split the support into data and labels
+            # support_data = support[:, :-self.n_labels]
+            # support_label = support[:, -self.n_labels:]
+            # # Followed by the calculation of v given h for both collections
+            # p_v_given_h_data = sigmoid(support_data)
+            # p_v_given_h_label = np.exp(support_label) / np.sum(np.exp(support_label), axis=1, keepdims=True)
+            # # We can then use the random binomial to get the activations for data (as in get_h_given_v)
+            # v_data = np.random.binomial(n=1, p=p_v_given_h_data)
+            # # And use the multinomial distribution to get activations for labels
+            # v_label = np.random.multinomial(n=1, pvals=p_v_given_h_label)
+            # # v_label = np.array([
+            # #     np.random.multinomial(1, pvals)
+            # #     for pvals in p_v_given_h_label
+            # # ])
+            # # Finally we contcatenate data and label probabilities and activations back into
+            # # a normal visible layer
+            # p_v_given_h = np.concatenate((p_v_given_h_data, p_v_given_h_label), axis=1)
+            # v = np.concatenate((v_data, v_label), axis=1)
             
+
+            support = self.bias_v + hidden_minibatch @ self.weight_vh.T
+            data_support = support[:, :-self.n_labels]
+            lbl_support = support[:, -self.n_labels:]
+
+            data_prob = sigmoid(data_support)
+            lbl_prob = softmax(lbl_support)
+
+            data_sample = sample_binary(data_prob)
+            lbl_sample = sample_categorical(lbl_prob)
+
+            p_v_given_h = np.hstack((data_prob, lbl_prob))
+            v = np.hstack((data_sample, lbl_sample))
         else:
                         
             # [TODO TASK 4.1] compute probabilities and activations (samples from probabilities) of visible layer (replace the pass and zeros below)             
@@ -371,7 +436,7 @@ class RestrictedBoltzmannMachine():
             # [TODO TASK 4.2] performs same computaton as the function 'get_v_given_h' but with directed connections (replace the pass and zeros below)             
             # (student)
             # First we calculate the probability of v given h
-            p_v_given_h_direct = sigmoid(self.bias_v + np.dot(hidden_minibatch, self.weight_h_to_v.T))
+            p_v_given_h_direct = sigmoid(self.bias_v + np.dot(hidden_minibatch, self.weight_h_to_v))
             # Then we sample from the probabilities to get activations (similar to get_h_given_v)
             v_direct = np.random.binomial(n=1, p=p_v_given_h_direct)
         
