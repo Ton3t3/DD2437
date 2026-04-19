@@ -22,29 +22,29 @@ if __name__ == "__main__":
     # rbm.cd1(visible_trainset=train_imgs, n_iterations=15)#15
 
     # #FOR DEEP NETWORK, INCLUDE MORE LAYERS
-    # rbm1 = RestrictedBoltzmannMachine(ndim_visible=784,
-    #                                  ndim_hidden=500,
-    #                                  is_bottom=True,
-    #                                  image_size=image_size,
-    #                                  is_top=False,
-    #                                  n_labels=10,
-    #                                  batch_size=20
-    # )
-    # rbm1.cd1(visible_trainset=train_imgs, n_iterations=10)#15
+    rbm1 = RestrictedBoltzmannMachine(ndim_visible=784,
+                                     ndim_hidden=500,
+                                     is_bottom=True,
+                                     image_size=image_size,
+                                     is_top=False,
+                                     n_labels=10,
+                                     batch_size=20
+    )
+    rbm1.cd1(visible_trainset=train_imgs, n_iterations=15001)#15
 
-    # p_h1, h1 = rbm1.get_h_given_v(train_imgs)
+    p_h1, h1 = rbm1.get_h_given_v(train_imgs)
 
 
 
-    # rbm2 = RestrictedBoltzmannMachine(ndim_visible=500,
-    #                                  ndim_hidden=500,
-    #                                  is_bottom=False,
-    #                                  image_size=image_size,
-    #                                  is_top=False,
-    #                                  n_labels=10,
-    #                                  batch_size=20
-    # )
-    # rbm2.cd1(visible_trainset=p_h1, n_iterations=10)#15
+    rbm2 = RestrictedBoltzmannMachine(ndim_visible=500,
+                                     ndim_hidden=500,
+                                     is_bottom=False,
+                                     image_size=image_size,
+                                     is_top=False,
+                                     n_labels=10,
+                                     batch_size=20
+    )
+    rbm2.cd1(visible_trainset=p_h1, n_iterations=15001)#15
 
     # pass
 
